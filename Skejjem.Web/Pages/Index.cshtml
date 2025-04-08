@@ -1,0 +1,168 @@
+﻿@page
+@model IndexModel
+@{
+    ViewData["Title"] = "Skejjem - Schedule your tasks the smart way";
+}
+
+<div class="text-center">
+    <h1 class="display-4">Skejjem</h1>
+    <p>Enter your tasks below and submit them to Skejjem:</p>
+
+    <div id="task-container">
+        <div class="task-input">
+            <input type="text" class="form-control" placeholder="Enter a task" />
+        </div>
+    </div>
+    <button id="add-task" class="btn btn-secondary mt-2">Add Another Task</button>
+    <button id="submit-tasks" class="btn btn-primary mt-2">Submit Tasks</button>
+
+    <div id="status-area" class="mt-4">
+        <h5>Status:</h5>
+        <p id="status-message"></p>
+        <ul id="task-output" class="list-group mt-3"></ul>
+    </div>
+</div>
+
+<style>
+    #task-output {
+        max-width: 600px;
+        margin: 0 auto;
+        padding: 0;
+    }
+
+    .list-group-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 15px;
+        margin-bottom: 5px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        background-color: #f9f9f9;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+        .list-group-item:hover {
+            transform: scale(1.02);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+    .task-icon {
+        font-size: 1.5rem;
+        color: #007bff;
+        margin-right: 10px;
+    }
+
+    .task-text {
+        flex-grow: 1;
+        font-size: 1.1rem;
+    }
+
+    .task-time {
+        font-weight: bold;
+        color: #6c757d;
+    }
+</style>
+
+<script>
+    document.getElementById('add-task').addEventListener('click', function () {
+        const taskContainer = document.getElementById('task-container');
+        const newTaskInput = document.createElement('div');
+        newTaskInput.classList.add('task-input');
+        newTaskInput.innerHTML = '<input type="text" class="form-control" placeholder="Enter a task" />';
+        taskContainer.appendChild(newTaskInput);
+    });
+
+        document.getElementById('submit-tasks').addEventListener('click', async function () {
+        const taskInputs = document.querySelectorAll('.task-input input');
+        const tasks = Array.from(taskInputs)
+            .map(input => input.value.trim())
+            .filter(task => task.length > 0);
+
+        const statusMessage = document.getElementById('status-message');
+        const taskOutput = document.getElementById('task-output');
+
+        // Clear previous status and output
+        statusMessage.textContent = '';
+        taskOutput.innerHTML = '';
+
+        if (tasks.length === 0) {
+            statusMessage.textContent = 'Please enter at least one task.';
+            return;
+        }
+
+        const reqBody = { taskList: tasks.join(', ') };
+
+        try {
+            const response = await fetch('https://localhost:7120/skejjem', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(reqBody)
+            });
+
+            if (response.ok) {
+                const jsonResponse = await response.json();
+
+                // Null checking and error handling
+                if (!jsonResponse.schedule) {
+                    statusMessage.textContent = 'No schedule found in the response.';
+                    return;
+                }
+
+                let parsedOuterSchedule;
+                try {
+                    parsedOuterSchedule = JSON.parse(jsonResponse.schedule);
+                } catch (error) {
+                    console.error('Error parsing outer schedule:', error);
+                    statusMessage.textContent = 'Failed to parse the outer schedule.';
+                    return;
+                }
+
+                if (!parsedOuterSchedule.schedule || !parsedOuterSchedule.schedule.tasks) {
+                    statusMessage.textContent = 'Invalid schedule format.';
+                    return;
+                }
+
+                const tasksArray = parsedOuterSchedule.schedule.tasks;
+
+                if (!Array.isArray(tasksArray)) {
+                    statusMessage.textContent = 'Tasks are not in the expected format.';
+                    return;
+                }
+
+                statusMessage.textContent = 'Tasks submitted successfully!';
+
+                // Iterate through the tasks array and display tasks with their times
+                tasksArray.forEach((item, index) => {
+                    const listItem = document.createElement('li');
+                    listItem.classList.add('list-group-item');
+
+                    const icon = document.createElement('span');
+                    icon.classList.add('task-icon');
+                    icon.innerHTML = '&#x2713;'; // Checkmark icon
+
+                    const taskText = document.createElement('span');
+                    taskText.classList.add('task-text');
+                    taskText.textContent = item.task || 'No task provided';
+
+                    const taskTime = document.createElement('span');
+                    taskTime.classList.add('task-time');
+                    taskTime.textContent = item.time || 'No time provided';
+
+                    listItem.appendChild(icon);
+                    listItem.appendChild(taskText);
+                    listItem.appendChild(taskTime);
+
+                    taskOutput.appendChild(listItem);
+                });
+            } else {
+                statusMessage.textContent = 'Failed to submit tasks. Please try again.';
+            }
+        } catch (error) {
+            console.error('Error submitting tasks:', error);
+            statusMessage.textContent = 'An error occurred while submitting tasks.';
+        }
+    });
+</script>
